@@ -55,4 +55,35 @@ export function blackScholes(input: BlackScholes): number {
     return price
   }
 }
+
+export function calculateGreeks(input: BlackScholes): Greeks {
+  const { S, K, T, r, sigma, type } = input
+  
+  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T))
+  const d2 = d1 - sigma * Math.sqrt(T)
+
+  const phi = Math.exp(-0.5 * d1 * d1) / Math.sqrt(2 * Math.PI)
+
+  let delta: number
+  if (type === 'call') {
+    delta = normalCDF(d1)
+  } else {
+    delta = normalCDF(d1) - 1
+  }
+
+  const gamma = phi / (S * sigma * Math.sqrt(T))
+
+  let theta: number
+  if (type === 'call') {
+    theta = (-(S * phi * sigma) / (2 * Math.sqrt(T)) - r * K * Math.exp(-r * T) * normalCDF(d2)) / 365
+  } else {
+    theta = (-(S * phi * sigma) / (2 * Math.sqrt(T)) + r * K * Math.exp(-r * T) * normalCDF(-d2)) / 365
+  }
+
+  const vega = S * phi * Math.sqrt(T) / 100
+
+  return { delta, gamma, theta, vega }
+
+}
+
     
