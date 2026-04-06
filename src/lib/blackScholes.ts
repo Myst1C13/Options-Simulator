@@ -8,6 +8,13 @@ interface BlackScholes {
 
 }
 
+interface Greeks { 
+  delta: number
+  gamma: number
+  theta: number
+  vega: number
+}
+
 function normalCDF(x: number): number {
   const a1 =  0.254829592;
   const a2 = -0.284496736;
