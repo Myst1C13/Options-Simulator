@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { fetchStockPrice } from './api/api'
 import { blackScholes, calculateGreeks } from './lib/blackScholes'
+import './App.css'
 
 interface Contract {
   strike: number
