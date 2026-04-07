@@ -1,26 +1,44 @@
-import { blackScholes, calculateGreeks } from './lib/blackScholes'
+import { useState } from 'react'
+import { fetchOptionsChain, fetchStockPrice } from './api/polygon'
 
 function App() {
-  const input = {
-    S: 213.49,
-    K: 215,
-    T: 17 / 365,
-    r: 0.053,
-    sigma: 0.25,
-    type: 'call' as const
+  const [ticker, setTicker] = useState('AAPL')
+  const [price, setPrice] = useState<number | null>(null)
+  const [contracts, setContracts] = useState<any[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleFetch() {
+    setLoading(true)
+    setError(null)
+    try {
+      const stockPrice = await fetchStockPrice(ticker)
+      const chain = await fetchOptionsChain(ticker)
+      setPrice(stockPrice)
+      setContracts(chain)
+    } catch (e) {
+      setError('Failed to fetch data. Check your API key.')
+    }
+    setLoading(false)
   }
 
-  const price = blackScholes(input)
-  const greeks = calculateGreeks(input)
-
   return (
-    <div>
-      <h1>AAPL $215 Call</h1>
-      <p>Price: ${price.toFixed(2)}</p>
-      <p>Delta: {greeks.delta.toFixed(3)}</p>
-      <p>Gamma: {greeks.gamma.toFixed(4)}</p>
-      <p>Theta: {greeks.theta.toFixed(4)}</p>
-      <p>Vega: {greeks.vega.toFixed(4)}</p>
+    <div style={{ padding: '2rem' }}>
+      <h1>Options Simulator</h1>
+      <div>
+        <input
+          value={ticker}
+          onChange={e => setTicker(e.target.value.toUpperCase())}
+          placeholder="Enter ticker"
+        />
+        <button onClick={handleFetch}>Fetch</button>
+      </div>
+      {loading && <p>Loading...</p>}
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {price && <p>Stock price: ${price.toFixed(2)}</p>}
+      {contracts.length > 0 && (
+        <p>Loaded {contracts.length} contracts</p>
+      )}
     </div>
   )
 }

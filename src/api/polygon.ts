@@ -1,43 +1,15 @@
-const API_KEY = import.meta.env.VITE_POLYGON_API_KEY
-
-interface OptionContract {
-  strike_price: number
-  expiration_date: string
-  contract_type: 'call' | 'put'
-  ticker: string
-  day: {
-    close: number
-    volume: number
-  }
-  greeks: {
-    delta: number
-    gamma: number
-    theta: number
-    vega: number
-  }
-  last_quote: {
-    ask: number
-    bid: number
-  }
-  open_interest: number
-  implied_volatility: number
-}
-
-interface PolygonOptionsResponse {
-  results: OptionContract[]
-  status: string
-}
-
-export async function fetchOptionsChain(ticker: string): Promise<OptionContract[]> {
-  const url = `https://api.polygon.io/v3/snapshot/options/${ticker}?limit=250&apiKey=${API_KEY}`
-  const response = await fetch(url)
-  const data: PolygonOptionsResponse = await response.json()
-  return data.results
-}
+const API_KEY = import.meta.env.VITE_ALPHA_VANTAGE_KEY
 
 export async function fetchStockPrice(ticker: string): Promise<number> {
-  const url = `https://api.polygon.io/v2/last/trade/${ticker}?apiKey=${API_KEY}`
+  const url = `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${ticker}&apikey=${API_KEY}`
   const response = await fetch(url)
   const data = await response.json()
-  return data.results.p
+  return parseFloat(data['Global Quote']['05. price'])
+}
+
+export async function fetchOptionsChain(ticker: string): Promise<any[]> {
+  const url = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${ticker}&apikey=${API_KEY}`
+  const response = await fetch(url)
+  const data = await response.json()
+  return data.data || []
 }
