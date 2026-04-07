@@ -1,46 +1,69 @@
 import { useState } from 'react'
-import { fetchOptionsChain, fetchStockPrice } from './api/api'
+import { fetchStockPrice } from './api/polygon'
+import { blackScholes, calculateGreeks } from './lib/blackScholes'
 
-function App() {
-  const [ticker, setTicker] = useState('AAPL')
-  const [price, setPrice] = useState<number | null>(null)
-  const [contracts, setContracts] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleFetch() {
-    setLoading(true)
-    setError(null)
-    try {
-      const stockPrice = await fetchStockPrice(ticker)
-      const chain = await fetchOptionsChain(ticker)
-      setPrice(stockPrice)
-      setContracts(chain)
-    } catch (e) {
-      setError('Failed to fetch data. Check your API key.')
-    }
-    setLoading(false)
-  }
-
-  return (
-    <div style={{ padding: '2rem' }}>
-      <h1>Options Simulator</h1>
-      <div>
-        <input
-          value={ticker}
-          onChange={e => setTicker(e.target.value.toUpperCase())}
-          placeholder="Enter ticker"
-        />
-        <button onClick={handleFetch}>Fetch</button>
-      </div>
-      {loading && <p>Loading...</p>}
-      {error && <p style={{ color: 'red' }}>{error}</p>}
-      {price && <p>Stock price: ${price.toFixed(2)}</p>}
-      {contracts.length > 0 && (
-        <p>Loaded {contracts.length} contracts</p>
-      )}
-    </div>
-  )
+interface Contract {
+  strike: number
+  expiry: string
+  type: 'call' | 'put'
+  bid: number
+  ask: number
+  iv: number
+  oi: number
+  volume: number
 }
 
-export default App
+function generateMockChain(stockPrice: number): Contract[] {
+  const strikes = [-15, -10, -5, -2.5, 0, 2.5, 5, 10, 15, 20].map(
+    d => Math.round((stockPrice + d) / 2.5) * 2.5
+  )
+
+  const expiry = '2026-04-17'
+  const contracts: Contract[] = []
+
+  strikes.forEach(strike => {
+    const iv = 0.25 + Math.abs(strike - stockPrice) * 0.001
+
+    const callPrice = blackScholes({
+      S: stockPrice,
+      K: strike,
+      T: 17 / 365,
+      r: 0.053,
+      sigma: iv,
+      type: 'call'
+    })
+
+    const putPrice = blackScholes({
+      S: stockPrice,
+      K: strike,
+      T: 17 / 365,
+      r: 0.053,
+      sigma: iv,
+      type: 'put'
+    })
+
+    contracts.push({
+      strike,
+      expiry,
+      type: 'call',
+      bid: parseFloat((callPrice * 0.95).toFixed(2)),
+      ask: parseFloat((callPrice * 1.05).toFixed(2)),
+      iv,
+      oi: Math.floor(Math.random() * 10000),
+      volume: Math.floor(Math.random() * 5000)
+    })
+
+    contracts.push({
+      strike,
+      expiry,
+      type: 'put',
+      bid: parseFloat((putPrice * 0.95).toFixed(2)),
+      ask: parseFloat((putPrice * 1.05).toFixed(2)),
+      iv,
+      oi: Math.floor(Math.random() * 10000),
+      volume: Math.floor(Math.random() * 5000)
+    })
+  })
+
+  return contracts
+}
