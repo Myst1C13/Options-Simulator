@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fetchStockPrice } from './api/polygon'
+import { fetchStockPrice } from './api/api'
 import { blackScholes, calculateGreeks } from './lib/blackScholes'
 
 interface Contract {
@@ -67,3 +67,357 @@ function generateMockChain(stockPrice: number): Contract[] {
 
   return contracts
 }
+
+function App() {
+  const [ticker, setTicker] = useState('AAPL')
+  const [stockPrice, setStockPrice] = useState<number | null>(null)
+  const [contracts, setContracts] = useState<Contract[]>([])
+  const [selected, setSelected] = useState<Contract | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [chainType, setChainType] = useState<'call' | 'put'>('call')
+  const [simPrice, setSimPrice] = useState(0)
+  const [simDTE, setSimDTE] = useState(17)
+  const [simIV, setSimIV] = useState(0)
+
+  async function handleFetch() {
+    setLoading(true)
+    try {
+      const price = await fetchStockPrice(ticker)
+      setStockPrice(price)
+      setContracts(generateMockChain(price))
+      setSimPrice(price)
+    } catch(e) {
+      alert('Failed to fetch. Check ticker.')
+    }
+    setLoading(false)
+  }
+
+  function selectContract(c: Contract) {
+    setSelected(c)
+    setSimPrice(stockPrice || c.strike)
+    setSimDTE(17)
+    setSimIV(0)
+  }
+
+  const filteredContracts = contracts.filter(c => c.type === chainType)
+
+  let pnl = 0
+  let greeks = { delta: 0, gamma: 0, theta: 0, vega: 0 }
+  let currentPrice = 0
+
+  if (selected && stockPrice) {
+    const entry = (selected.bid + selected.ask) / 2
+    const sigma = Math.max(0.01, selected.iv + simIV / 100)
+    currentPrice = blackScholes({
+      S: simPrice,
+      K: selected.strike,
+      T: simDTE / 365,
+      r: 0.053,
+      sigma,
+      type: selected.type
+    })
+    pnl = (currentPrice - entry) * 100
+    greeks = calculateGreeks({
+      S: simPrice,
+      K: selected.strike,
+      T: simDTE / 365,
+      r: 0.053,
+      sigma,
+      type: selected.type
+    })
+  }
+
+  return (
+    <div
+      style={{
+        maxWidth: 900,
+        margin: '0 auto',
+        padding: '2rem',
+        fontFamily: 'system-ui'
+      }}
+    >
+      <h1 style={{ fontSize: 24, fontWeight: 600, marginBottom: '1.5rem' }}>
+        Options Simulator
+      </h1>
+
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          alignItems: 'center',
+          marginBottom: '1.5rem'
+        }}
+      >
+        <input
+          value={ticker}
+          onChange={e => setTicker(e.target.value.toUpperCase())}
+          style={{
+            fontSize: 18,
+            fontWeight: 600,
+            padding: '8px 12px',
+            width: 120,
+            border: '1px solid #ccc',
+            borderRadius: 8
+          }}
+        />
+        <button
+          onClick={handleFetch}
+          style={{
+            padding: '8px 20px',
+            borderRadius: 8,
+            background: '#000',
+            color: '#fff',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 14
+          }}
+        >
+          {loading ? 'Loading...' : 'Fetch'}
+        </button>
+        {stockPrice && (
+          <span style={{ fontSize: 22, fontWeight: 500 }}>
+            ${stockPrice.toFixed(2)}
+          </span>
+        )}
+      </div>
+
+      {contracts.length > 0 && (
+        <div>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              marginBottom: 12
+            }}
+          >
+            {(['call', 'put'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setChainType(t)}
+                style={{
+                  padding: '6px 16px',
+                  borderRadius: 99,
+                  border: '1px solid #ccc',
+                  cursor: 'pointer',
+                  background: chainType === t ? '#000' : '#fff',
+                  color: chainType === t ? '#fff' : '#000',
+                  fontSize: 13
+                }}
+              >
+                {t === 'call' ? 'Calls' : 'Puts'}
+              </button>
+            ))}
+          </div>
+
+          <table
+            style={{
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: 13,
+              marginBottom: '1.5rem'
+            }}
+          >
+            <thead>
+              <tr style={{ borderBottom: '1px solid #eee' }}>
+                {['Strike', 'Bid', 'Ask', 'IV', 'OI', 'Volume'].map(h => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: '8px 10px',
+                      textAlign: 'right',
+                      color: '#888',
+                      fontWeight: 500,
+                      fontSize: 11
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredContracts.map((c, i) => {
+                const itm = chainType === 'call'
+                  ? c.strike < (stockPrice || 0)
+                  : c.strike > (stockPrice || 0)
+                const isSelected =
+                  selected?.strike === c.strike &&
+                  selected?.type === c.type
+                return (
+                  <tr
+                    key={i}
+                    onClick={() => selectContract(c)}
+                    style={{
+                      cursor: 'pointer',
+                      background: isSelected
+                        ? '#f0f9f0'
+                        : itm ? '#f8f8f8' : '#fff',
+                      borderBottom: '1px solid #f0f0f0'
+                    }}
+                  >
+                    <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 500 }}>
+                      ${c.strike}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: itm ? '#16a34a' : '#666' }}>
+                      {c.bid.toFixed(2)}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right', color: itm ? '#16a34a' : '#666' }}>
+                      {c.ask.toFixed(2)}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                      {(c.iv * 100).toFixed(0)}%
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                      {c.oi.toLocaleString()}
+                    </td>
+                    <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                      {c.volume.toLocaleString()}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          {selected && (
+            <div
+              style={{
+                border: '1px solid #e5e5e5',
+                borderRadius: 12,
+                padding: '1.25rem'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  marginBottom: '1rem'
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>
+                    {ticker} ${selected.strike} {selected.type === 'call' ? 'Call' : 'Put'} — {selected.expiry}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+                    Entry: ${((selected.bid + selected.ask) / 2).toFixed(2)} · 1 contract · 100 shares
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div
+                    style={{
+                      fontSize: 28,
+                      fontWeight: 600,
+                      color: pnl >= 0 ? '#16a34a' : '#dc2626'
+                    }}
+                  >
+                    {pnl >= 0 ? '+' : ''}${Math.round(pnl)}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 12,
+                  marginBottom: '1rem'
+                }}
+              >
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, color: '#666' }}>Stock price at expiry</span>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>${simPrice.toFixed(0)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={stockPrice! * 0.7}
+                    max={stockPrice! * 1.3}
+                    step={1}
+                    value={simPrice}
+                    onChange={e => setSimPrice(parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, color: '#666' }}>Days until expiry</span>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{simDTE}d</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={17}
+                    step={1}
+                    value={simDTE}
+                    onChange={e => setSimDTE(parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, color: '#666' }}>IV change</span>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{simIV > 0 ? '+' : ''}{simIV}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={-50}
+                    max={50}
+                    step={1}
+                    value={simIV}
+                    onChange={e => setSimIV(parseFloat(e.target.value))}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(4, 1fr)',
+                  gap: 8,
+                  paddingTop: '1rem',
+                  borderTop: '1px solid #f0f0f0'
+                }}
+              >
+                {[
+                  { name: 'Delta', value: greeks.delta.toFixed(3) },
+                  { name: 'Gamma', value: greeks.gamma.toFixed(4) },
+                  { name: 'Theta', value: greeks.theta.toFixed(3) },
+                  { name: 'Vega', value: greeks.vega.toFixed(3) },
+                ].map(g => (
+                  <div
+                    key={g.name}
+                    style={{
+                      textAlign: 'center',
+                      background: '#f8f8f8',
+                      borderRadius: 8,
+                      padding: '10px 0'
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: '#888',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.05em'
+                      }}
+                    >
+                      {g.name}
+                    </div>
+                    <div style={{ fontSize: 16, fontWeight: 500, marginTop: 4 }}>
+                      {g.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+export default App
