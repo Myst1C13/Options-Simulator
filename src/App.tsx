@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fetchOptionsChain, fetchStockPrice } from './api/polygon'
+import { fetchOptionsChain, fetchStockPrice } from './api/api'
 
 function App() {
   const [ticker, setTicker] = useState('AAPL')

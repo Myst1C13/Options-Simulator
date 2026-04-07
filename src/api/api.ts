@@ -8,7 +8,7 @@ export async function fetchStockPrice(ticker: string): Promise<number> {
 }
 
 export async function fetchOptionsChain(ticker: string): Promise<any[]> {
-  const url = `https://www.alphavantage.co/query?function=HISTORICAL_OPTIONS&symbol=${ticker}&apikey=${API_KEY}`
+  const url = `https://www.alphavantage.co/query?function=REALTIME_OPTIONS&symbol=${ticker}&apikey=${API_KEY}`
   const response = await fetch(url)
   const data = await response.json()
   return data.data || []
