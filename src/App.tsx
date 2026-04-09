@@ -50,7 +50,12 @@ function generateMockChain(stockPrice: number, expiry: string, dte: number): Con
   const contracts: Contract[] = []
 
   strikes.forEach(strike => {
-    const iv = 0.25 + Math.abs(strike - stockPrice) * 0.001
+    const distance = (strike - stockPrice) / stockPrice
+    // Puts carry a skew premium — IV rises faster on the downside than upside
+    const skew = distance < 0 ? -distance * 0.4 : distance * 0.15
+    // Quadratic curve so far OTM strikes have meaningfully higher IV
+    const curve = distance * distance * 2.5
+    const iv = Math.max(0.05, 0.25 + skew + curve)
 
     const callPrice = blackScholes({ S: stockPrice, K: strike, T, r: RISK_FREE_RATE, sigma: iv, type: 'call' })
     const putPrice = blackScholes({ S: stockPrice, K: strike, T, r: RISK_FREE_RATE, sigma: iv, type: 'put' })
