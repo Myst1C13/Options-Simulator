@@ -1,7 +1,27 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { fetchStockPrice } from './api/api'
 import { blackScholes, calculateGreeks } from './lib/blackScholes'
+import { ExpiryCalendar } from './components/ExpiryCalendar'
 import './App.css'
+
+function getNextFriday(): string {
+  const today = new Date()
+  const day = today.getDay()
+  const daysUntil = ((5 - day + 7) % 7) || 7
+  const next = new Date(today)
+  next.setDate(today.getDate() + daysUntil)
+  const y = next.getFullYear()
+  const m = String(next.getMonth() + 1).padStart(2, '0')
+  const d = String(next.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+function getDaysToExpiry(expiry: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const exp = new Date(expiry + 'T00:00:00')
+  return Math.max(0, Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)))
+}
 
 interface Contract {
   strike: number
@@ -14,39 +34,21 @@ interface Contract {
   volume: number
 }
 
-function generateMockChain(stockPrice: number): Contract[] {
+function generateMockChain(stockPrice: number, expiry: string, dte: number): Contract[] {
   const strikes = [-15, -10, -5, -2.5, 0, 2.5, 5, 10, 15, 20].map(
     d => Math.round((stockPrice + d) / 2.5) * 2.5
   )
-
-  const expiry = '2026-04-17'
+  const T = Math.max(dte, 1) / 365
   const contracts: Contract[] = []
 
   strikes.forEach(strike => {
     const iv = 0.25 + Math.abs(strike - stockPrice) * 0.001
 
-    const callPrice = blackScholes({
-      S: stockPrice,
-      K: strike,
-      T: 17 / 365,
-      r: 0.053,
-      sigma: iv,
-      type: 'call'
-    })
-
-    const putPrice = blackScholes({
-      S: stockPrice,
-      K: strike,
-      T: 17 / 365,
-      r: 0.053,
-      sigma: iv,
-      type: 'put'
-    })
+    const callPrice = blackScholes({ S: stockPrice, K: strike, T, r: 0.053, sigma: iv, type: 'call' })
+    const putPrice = blackScholes({ S: stockPrice, K: strike, T, r: 0.053, sigma: iv, type: 'put' })
 
     contracts.push({
-      strike,
-      expiry,
-      type: 'call',
+      strike, expiry, type: 'call',
       bid: parseFloat((callPrice * 0.95).toFixed(2)),
       ask: parseFloat((callPrice * 1.05).toFixed(2)),
       iv,
@@ -55,9 +57,7 @@ function generateMockChain(stockPrice: number): Contract[] {
     })
 
     contracts.push({
-      strike,
-      expiry,
-      type: 'put',
+      strike, expiry, type: 'put',
       bid: parseFloat((putPrice * 0.95).toFixed(2)),
       ask: parseFloat((putPrice * 1.05).toFixed(2)),
       iv,
@@ -76,16 +76,40 @@ function App() {
   const [selected, setSelected] = useState<Contract | null>(null)
   const [loading, setLoading] = useState(false)
   const [chainType, setChainType] = useState<'call' | 'put'>('call')
+  const [expiry, setExpiry] = useState(getNextFriday())
+  const [showCalendar, setShowCalendar] = useState(false)
   const [simPrice, setSimPrice] = useState(0)
-  const [simDTE, setSimDTE] = useState(17)
+  const [simDTE, setSimDTE] = useState(() => getDaysToExpiry(getNextFriday()))
   const [simIV, setSimIV] = useState(0)
+  const calendarRef = useRef<HTMLDivElement>(null)
+
+  const dte = getDaysToExpiry(expiry)
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (calendarRef.current && !calendarRef.current.contains(e.target as Node)) {
+        setShowCalendar(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  function handleExpiryChange(newExpiry: string) {
+    setExpiry(newExpiry)
+    const newDte = getDaysToExpiry(newExpiry)
+    setSimDTE(newDte)
+    setSelected(null)
+    if (stockPrice) setContracts(generateMockChain(stockPrice, newExpiry, newDte))
+  }
 
   async function handleFetch() {
     setLoading(true)
     try {
       const price = await fetchStockPrice(ticker)
       setStockPrice(price)
-      setContracts(generateMockChain(price))
+      setContracts(generateMockChain(price, expiry, dte))
       setSimPrice(price)
     } catch(e) {
       alert('Failed to fetch. Check ticker.')
@@ -96,7 +120,7 @@ function App() {
   function selectContract(c: Contract) {
     setSelected(c)
     setSimPrice(stockPrice || c.strike)
-    setSimDTE(17)
+    setSimDTE(dte)
     setSimIV(0)
   }
 
@@ -175,6 +199,30 @@ function App() {
         >
           {loading ? 'Loading...' : 'Fetch'}
         </button>
+        {/* Expiry picker */}
+        <div ref={calendarRef} style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowCalendar(s => !s)}
+            style={{
+              padding: '8px 14px',
+              borderRadius: 8,
+              border: '1px solid #ccc',
+              background: '#fff',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 500
+            }}
+          >
+            Exp: {expiry} <span style={{ color: '#888', fontWeight: 400 }}>({dte}d)</span>
+          </button>
+          {showCalendar && (
+            <ExpiryCalendar
+              selected={expiry}
+              onChange={handleExpiryChange}
+              onClose={() => setShowCalendar(false)}
+            />
+          )}
+        </div>
         {stockPrice && (
           <span style={{ fontSize: 22, fontWeight: 500 }}>
             ${stockPrice.toFixed(2)}
@@ -348,7 +396,7 @@ function App() {
                   <input
                     type="range"
                     min={0}
-                    max={17}
+                    max={dte}
                     step={1}
                     value={simDTE}
                     onChange={e => setSimDTE(parseFloat(e.target.value))}
