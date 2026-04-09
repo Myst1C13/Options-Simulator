@@ -36,6 +36,12 @@ interface Contract {
   volume: number
 }
 
+// Deterministic pseudo-random from a seed so OI/volume are stable per strike
+function seededRand(seed: number): number {
+  const x = Math.sin(seed) * 10000
+  return x - Math.floor(x)
+}
+
 function generateMockChain(stockPrice: number, expiry: string, dte: number): Contract[] {
   const strikes = [-15, -10, -5, -2.5, 0, 2.5, 5, 10, 15, 20].map(
     d => Math.round((stockPrice + d) / 2.5) * 2.5
@@ -49,22 +55,23 @@ function generateMockChain(stockPrice: number, expiry: string, dte: number): Con
     const callPrice = blackScholes({ S: stockPrice, K: strike, T, r: RISK_FREE_RATE, sigma: iv, type: 'call' })
     const putPrice = blackScholes({ S: stockPrice, K: strike, T, r: RISK_FREE_RATE, sigma: iv, type: 'put' })
 
+    const callOI = Math.floor(seededRand(strike * 1.1) * 10000)
+    const callVol = Math.floor(seededRand(strike * 2.3) * 5000)
+    const putOI = Math.floor(seededRand(strike * 3.7) * 10000)
+    const putVol = Math.floor(seededRand(strike * 4.9) * 5000)
+
     contracts.push({
       strike, expiry, type: 'call',
       bid: parseFloat((callPrice * 0.95).toFixed(2)),
       ask: parseFloat((callPrice * 1.05).toFixed(2)),
-      iv,
-      oi: Math.floor(Math.random() * 10000),
-      volume: Math.floor(Math.random() * 5000)
+      iv, oi: callOI, volume: callVol
     })
 
     contracts.push({
       strike, expiry, type: 'put',
       bid: parseFloat((putPrice * 0.95).toFixed(2)),
       ask: parseFloat((putPrice * 1.05).toFixed(2)),
-      iv,
-      oi: Math.floor(Math.random() * 10000),
-      volume: Math.floor(Math.random() * 5000)
+      iv, oi: putOI, volume: putVol
     })
   })
 
