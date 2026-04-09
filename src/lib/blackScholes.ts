@@ -43,8 +43,14 @@ function normalCDF(x: number): number {
 }
 
 export function blackScholes(input: BlackScholes): number {
-    
+
     const { S, K, T, r, sigma, type } = input;
+
+    // At expiry, return intrinsic value — Black-Scholes breaks at T=0
+    if (T <= 0) {
+      return type === 'call' ? Math.max(S - K, 0) : Math.max(K - S, 0)
+    }
+
     const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T))
     const d2 = d1 - sigma * Math.sqrt(T)
     if (type === 'call') {
@@ -58,7 +64,13 @@ export function blackScholes(input: BlackScholes): number {
 
 export function calculateGreeks(input: BlackScholes): Greeks {
   const { S, K, T, r, sigma, type } = input
-  
+
+  // At expiry Greeks are degenerate — delta is binary, all others are 0
+  if (T <= 0) {
+    const delta = type === 'call' ? (S >= K ? 1 : 0) : (S <= K ? -1 : 0)
+    return { delta, gamma: 0, theta: 0, vega: 0 }
+  }
+
   const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T))
   const d2 = d1 - sigma * Math.sqrt(T)
 
