@@ -4,6 +4,8 @@ import { blackScholes, calculateGreeks } from './lib/blackScholes'
 import { ExpiryCalendar } from './components/ExpiryCalendar'
 import './App.css'
 
+const RISK_FREE_RATE = 0.053
+
 function getNextFriday(): string {
   const today = new Date()
   const day = today.getDay()
@@ -44,8 +46,8 @@ function generateMockChain(stockPrice: number, expiry: string, dte: number): Con
   strikes.forEach(strike => {
     const iv = 0.25 + Math.abs(strike - stockPrice) * 0.001
 
-    const callPrice = blackScholes({ S: stockPrice, K: strike, T, r: 0.053, sigma: iv, type: 'call' })
-    const putPrice = blackScholes({ S: stockPrice, K: strike, T, r: 0.053, sigma: iv, type: 'put' })
+    const callPrice = blackScholes({ S: stockPrice, K: strike, T, r: RISK_FREE_RATE, sigma: iv, type: 'call' })
+    const putPrice = blackScholes({ S: stockPrice, K: strike, T, r: RISK_FREE_RATE, sigma: iv, type: 'put' })
 
     contracts.push({
       strike, expiry, type: 'call',
@@ -137,7 +139,7 @@ function App() {
       S: simPrice,
       K: selected.strike,
       T: simDTE / 365,
-      r: 0.053,
+      r: RISK_FREE_RATE,
       sigma,
       type: selected.type
     })
@@ -146,7 +148,7 @@ function App() {
       S: simPrice,
       K: selected.strike,
       T: simDTE / 365,
-      r: 0.053,
+      r: RISK_FREE_RATE,
       sigma,
       type: selected.type
     })
