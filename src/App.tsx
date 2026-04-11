@@ -55,13 +55,6 @@ function formatSignedCurrency(value: number): string {
   return `${prefix}${formatCurrency(value, 0)}`
 }
 
-function formatCompactNumber(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    notation: 'compact',
-    maximumFractionDigits: 1,
-  }).format(value)
-}
-
 function formatPercent(value: number, digits = 0): string {
   return `${value.toFixed(digits)}%`
 }
@@ -297,22 +290,30 @@ function App() {
   const [error, setError] = useState('')
   const [chainType, setChainType] = useState<ContractType>('call')
   const [chainMode, setChainMode] = useState<ChainMode>('idle')
-  const [chainNote, setChainNote] = useState('source :: waiting for quote')
   const [simPrice, setSimPrice] = useState(0)
   const [simDTE, setSimDTE] = useState(() => getDaysToExpiry(getNextFriday()))
   const [simIV, setSimIV] = useState(0)
 
   const dte = expiry ? getDaysToExpiry(expiry) : 0
   const filteredContracts = contracts.filter(contract => contract.type === chainType)
-  const openInterest = filteredContracts.reduce((sum, contract) => sum + contract.oi, 0)
-  const totalVolume = filteredContracts.reduce((sum, contract) => sum + contract.volume, 0)
   const priceSliderStep = 0.1
+  const chainHeading = ticker
+    ? `${ticker} ${chainType === 'call' ? 'Calls' : 'Puts'}`
+    : 'Option Chain'
+  const statusItems = [
+    { label: 'Spot', value: stockPrice ? formatCurrency(stockPrice) : 'Waiting' },
+    { label: 'Expiry', value: expiry ? `${formatExpiryLabel(expiry)} · ${dte}d` : 'Select expiry' },
+    {
+      label: 'Data',
+      value:
+        chainMode === 'realtime' ? 'Realtime chain' : chainMode === 'unavailable' ? 'Unavailable' : 'Idle',
+    },
+  ]
 
   async function refreshChain(symbol: string, livePrice: number, nextExpiry: string) {
     const result = await loadChain(symbol, nextExpiry)
     setContracts(result.contracts)
     setChainMode(result.mode)
-    setChainNote(result.note)
     setSelected(null)
     setSimPrice(livePrice)
     setSimDTE(getDaysToExpiry(nextExpiry))
@@ -425,23 +426,13 @@ function App() {
             a smooth return slider that lets you stress price, time, and IV.
           </p>
 
-          <div className="metrics-grid">
-            <MetricCard
-              label="spot"
-              value={stockPrice ? formatCurrency(stockPrice) : 'waiting'}
-            />
-            <MetricCard
-              label="expiry"
-              value={expiry ? `${formatExpiryLabel(expiry)} :: ${dte}d` : 'Select expiry'}
-            />
-            <MetricCard
-              label="chain"
-              value={chainMode === 'realtime' ? 'Realtime' : chainMode === 'unavailable' ? 'Unavailable' : 'Idle'}
-            />
-            <MetricCard
-              label="focus"
-              value={selected ? `${formatCurrency(selected.strike)} ${selected.type}` : 'none'}
-            />
+          <div className="status-strip">
+            {statusItems.map(item => (
+              <div key={item.label} className="status-pill">
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+              </div>
+            ))}
           </div>
         </section>
 
@@ -474,13 +465,6 @@ function App() {
             </button>
           </form>
 
-          <div className="terminal-line">
-            <span>{chainNote}</span>
-            <span>contracts :: {filteredContracts.length}</span>
-            <span>oi :: {filteredContracts.length ? formatCompactNumber(openInterest) : '0'}</span>
-            <span>vol :: {filteredContracts.length ? formatCompactNumber(totalVolume) : '0'}</span>
-          </div>
-
           {chainMode === 'unavailable' && (
             <div className="terminal-banner">
               Realtime option prices were not available from the API. I am not showing a modeled
@@ -497,7 +481,7 @@ function App() {
               <div className="panel-head">
                 <div>
                   <div className="terminal-kicker">Chain</div>
-                  <h2>{ticker} {chainType === 'call' ? 'Calls' : 'Puts'}</h2>
+                  <h2>{chainHeading}</h2>
                 </div>
 
                 <div className="panel-meta">
@@ -568,8 +552,8 @@ function App() {
             </div>
           </article>
 
-              <article className="terminal-panel simulator-panel">
-            {selected ? (
+          {selected ? (
+            <article className="terminal-panel simulator-panel">
               <>
                 <div className="panel-head">
                   <div>
@@ -636,31 +620,16 @@ function App() {
                   <MetricCard label="vega" value={greeks.vega.toFixed(3)} />
                 </div>
               </>
-            ) : (
+            </article>
+          ) : (
+            <article className="terminal-panel simulator-panel simulator-panel--empty">
               <div className="empty-simulator">
-                <div className="terminal-kicker">Setup</div>
-                <h2>Pick One Contract</h2>
-                <p>
-                  The right side stays simple on purpose. Select one row from the chain and this
-                  panel becomes the scenario slider.
-                </p>
-                <div className="setup-card">
-                  <strong>Local setup</strong>
-                  <span>Create a local <code>.env</code> file with:</span>
-                  <code>VITE_ALPHA_VANTAGE_KEY=your_key_here</code>
-                  <span>
-                    Product note: don&apos;t put GitHub or README links in the main UI. Keep setup
-                    guidance small and local, then replace it later with a backend.
-                  </span>
-                  <span>
-                    Important: correct option close prices have to come from a real options data
-                    provider. A pricing model can estimate theoretical value, but it cannot recreate
-                    the market&apos;s actual close for every contract.
-                  </span>
-                </div>
+                <div className="terminal-kicker">Return Slider</div>
+                <h2>Select a Contract</h2>
+                <p>Choose one call or put from the chain to open the simulator.</p>
               </div>
-            )}
-          </article>
+            </article>
+          )}
         </section>
       </main>
     </div>
